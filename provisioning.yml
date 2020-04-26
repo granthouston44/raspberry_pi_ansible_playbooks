@@ -1,0 +1,52 @@
+# Run with 
+# ansible-playbook provisioning.yml -k
+# make sure to update ipaddress with whatever router shows
+# - Before putting the SD card on RPi, mount it and:
+#     - Create empty SSH file (touch /Volumes/boot/SSH)
+#     - Copy over wpa_supplicant.conf to /Volumes/boot/
+
+
+- hosts: raspberrypi
+  remote_user: pi
+  become: yes
+  become_method: sudo
+  vars:
+    admin_user: granthouston44
+    admin_user_key: ~/.ssh/known_hosts
+    host: raspberrypi
+    interface: wlan0
+    # ipaddress: find from router
+    ipaddress: 192.168.0.12
+    routers: 192.168.0.1
+    dns_servers: 8.8.8.8
+
+  # roles:
+  # - grant.user_setup
+  
+  tasks: 
+  - name: Update all packages to latest within distro, then remove unneeded
+    block: 
+      - apt: update_cache=yes upgrade=dist
+      - apt: autoremove=yes
+    
+  - name: Configure timezone
+    timezone:
+      name: Europe/London
+
+  - name: Configure static IP
+    lineinfile: 
+      dest: /etc/dhcpcd.conf
+      regexp: "{{ item.regexp }}"
+      line: "{{item.line}}"
+      state: present
+    with_items:
+      - {regexp: "^interface eth[0-9]$", line: "interface {{interface}}"}
+      - {regexp: "^static ip_address", line: "static ip_address={{ipaddress}}"}
+      - {regexp: "^static routers", line: "static routers={{routers}}"} 
+      - {regexp: "^static domain_name_servers", line: "static domain_name_servers={{dns_servers}}"}
+
+  - name: adding default gateway
+    command: route add default gw 192.168.0.1
+
+  - name: Reboot
+    reboot: 

@@ -1,0 +1,85 @@
+# run after initial provisioning
+
+- hosts: raspberrypi
+  remote_user: pi
+  become: yes
+  vars:
+    # admin_user: granthouston44
+    
+
+  handlers:
+  - name: restart ssh
+    service: name=ssh state=restarted
+
+  - name: restart dns
+    service: name=dnsmasq state=restarted
+
+  - name: restart unattended-upgrades
+    service: name=unattended-upgrades state=restarted
+
+  - name: reboot
+    reboot:
+
+  tasks:
+    - name: install motion and setup
+      block:
+        - name: get the motion package
+          apt: 
+            name: motion
+        - name: setup motion conf
+          copy: 
+            src: /Users/granthouston/Documents/raspberry_pi_setup/motion.conf
+            dest: /etc/motion/
+            owner: root
+            group: root
+            mode: '0644'
+            backup: yes
+        - name: restart the service
+          service: 
+              name: motion
+              state: restarted
+        - name: start the service
+          command: motion
+          become: yes
+          become_user: pi
+        - name: edit motion daemon
+          lineinfile: 
+              path: /etc/default/motion
+              regexp: ^start_motion_daemon
+              line: start_motion_daemon=yes
+  
+    - name: setup no-ip
+      block:
+      - name: make dir
+        file: 
+          path: /home/pi/noip
+          state: directory
+      - name: download no ip
+        get_url: 
+            url: http://www.no-ip.com/client/linux/noip-duc-linux.tar.gz
+            dest: /home/pi/noip
+            mode: '0440'
+            timeout: 300
+      - name: unzip the files
+        unarchive: 
+          src: /home/pi/noip/noip-duc-linux.tar.gz 
+          dest: /home/pi/noip/
+          remote_src: yes
+      - name: Run 'install' target as root
+        make:
+            chdir: /home/pi/noip/noip-2.1.9-1/
+            target: install
+        become: yes
+      - name: start the noip2 
+        command: noip2 -S
+      - name: Ensure the default Apache port is 8080
+        lineinfile:
+          path: /etc/rc.local
+          regexp: '^fi'
+          insertafter: '^fi '
+          line: /usr/local/bin/noip2
+
+
+
+
+
